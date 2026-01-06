@@ -23,12 +23,19 @@ import {
   Server,
   Network,
   Headphones,
-  MonitorDot
+  MonitorDot,
+  Loader2
 } from 'lucide-react';
-import { assets, employees, assignments } from '@/data/mockData';
-import type { Asset, AssetType } from '@/types';
+import { useAssets } from '@/hooks/useAssets';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useAssignments } from '@/hooks/useAssignments';
+import { useAuth } from '@/contexts/AuthContext';
+import { AssetFormDialog } from '@/components/forms/AssetFormDialog';
+import type { Database } from '@/integrations/supabase/types';
 
-const typeIcons: Record<AssetType, typeof Laptop> = {
+type AssetType = Database['public']['Enums']['asset_type'];
+
+const typeIcons: Record<string, typeof Laptop> = {
   laptop: Laptop,
   desktop: MonitorDot,
   monitor: MonitorIcon,
@@ -37,7 +44,7 @@ const typeIcons: Record<AssetType, typeof Laptop> = {
   accessory: Headphones,
 };
 
-const typeLabels: Record<AssetType, string> = {
+const typeLabels: Record<string, string> = {
   laptop: 'Laptop',
   desktop: 'Desktop',
   monitor: 'Monitor',
@@ -48,15 +55,24 @@ const typeLabels: Record<AssetType, string> = {
 
 export default function Assets() {
   const navigate = useNavigate();
+  const { hasAnyRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [ownershipFilter, setOwnershipFilter] = useState<string>('all');
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<any>(null);
+
+  const { data: assets = [], isLoading } = useAssets();
+  const { data: employees = [] } = useEmployees();
+  const { data: assignments = [] } = useAssignments();
+
+  const canEdit = hasAnyRole(['it', 'admin']);
 
   const filteredAssets = assets.filter(asset => {
     const matchesSearch = 
-      asset.assetId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      asset.serialNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      asset.asset_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      asset.serial_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       asset.manufacturer.toLowerCase().includes(searchQuery.toLowerCase()) ||
       asset.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (asset.hostname?.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -69,25 +85,24 @@ export default function Assets() {
   });
 
   const getAssignedEmployee = (assetId: string) => {
-    const assignment = assignments.find(a => a.assetId === assetId && !a.endDate);
+    const assignment = assignments.find(a => a.asset_id === assetId && a.status === 'active');
     if (!assignment) return null;
-    const employee = employees.find(e => e.id === assignment.employeeId);
-    return employee;
+    return employees.find(e => e.id === assignment.employee_id);
   };
 
   const columns = [
     {
-      key: 'assetId',
+      key: 'asset_id',
       header: 'Asset',
-      render: (asset: Asset) => {
-        const Icon = typeIcons[asset.type];
+      render: (asset: any) => {
+        const Icon = typeIcons[asset.type] || MonitorIcon;
         return (
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <Icon className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="font-medium font-mono text-sm">{asset.assetId}</p>
+              <p className="font-medium font-mono text-sm">{asset.asset_id}</p>
               <p className="text-xs text-muted-foreground">
                 {asset.manufacturer} {asset.model}
               </p>
@@ -99,24 +114,24 @@ export default function Assets() {
     {
       key: 'type',
       header: 'Type',
-      render: (asset: Asset) => (
-        <span className="text-sm">{typeLabels[asset.type]}</span>
+      render: (asset: any) => (
+        <span className="text-sm">{typeLabels[asset.type] || asset.type}</span>
       ),
     },
     {
       key: 'status',
       header: 'Status',
-      render: (asset: Asset) => <StatusBadge status={asset.status} />,
+      render: (asset: any) => <StatusBadge status={asset.status} />,
     },
     {
       key: 'ownership',
       header: 'Ownership',
-      render: (asset: Asset) => <StatusBadge status={asset.ownership} />,
+      render: (asset: any) => <StatusBadge status={asset.ownership} />,
     },
     {
       key: 'assignedTo',
       header: 'Assigned To',
-      render: (asset: Asset) => {
+      render: (asset: any) => {
         const employee = getAssignedEmployee(asset.id);
         return employee ? (
           <div className="flex items-center gap-2">
@@ -131,16 +146,16 @@ export default function Assets() {
       },
     },
     {
-      key: 'serialNumber',
+      key: 'serial_number',
       header: 'Serial Number',
-      render: (asset: Asset) => (
-        <span className="font-mono text-xs">{asset.serialNumber}</span>
+      render: (asset: any) => (
+        <span className="font-mono text-xs">{asset.serial_number}</span>
       ),
     },
     {
       key: 'actions',
       header: '',
-      render: (asset: Asset) => (
+      render: (asset: any) => (
         <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
@@ -152,13 +167,33 @@ export default function Assets() {
           >
             <FileText className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (canEdit) {
+                setEditingAsset(asset);
+                setFormOpen(true);
+              }
+            }}
+          >
             <Eye className="w-4 h-4" />
           </Button>
         </div>
       ),
     },
   ];
+
+  if (isLoading) {
+    return (
+      <MainLayout title="Assets" subtitle="Manage all IT equipment and devices">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout 
@@ -186,9 +221,11 @@ export default function Assets() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="in_use">In Use</SelectItem>
-                <SelectItem value="in_stock">In Stock</SelectItem>
+                <SelectItem value="spare">Spare</SelectItem>
                 <SelectItem value="under_repair">Under Repair</SelectItem>
+                <SelectItem value="quarantined">Quarantined</SelectItem>
                 <SelectItem value="retired">Retired</SelectItem>
+                <SelectItem value="disposed">Disposed</SelectItem>
               </SelectContent>
             </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -208,9 +245,9 @@ export default function Assets() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Owners</SelectItem>
-                <SelectItem value="TinextaCyber">TinextaCyber</SelectItem>
-                <SelectItem value="FDM">FDM</SelectItem>
-                <SelectItem value="ServiceFactory">ServiceFactory</SelectItem>
+                <SelectItem value="company">Company</SelectItem>
+                <SelectItem value="leased">Leased</SelectItem>
+                <SelectItem value="personal">Personal</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -219,10 +256,12 @@ export default function Assets() {
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Asset
-            </Button>
+            {canEdit && (
+              <Button size="sm" onClick={() => { setEditingAsset(null); setFormOpen(true); }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Asset
+              </Button>
+            )}
           </div>
         </div>
 
@@ -239,9 +278,9 @@ export default function Assets() {
             </p>
           </div>
           <div className="p-4 rounded-lg bg-card border border-border">
-            <p className="text-sm text-muted-foreground">In Stock</p>
+            <p className="text-sm text-muted-foreground">Spare</p>
             <p className="text-2xl font-bold text-status-info">
-              {assets.filter(a => a.status === 'in_stock').length}
+              {assets.filter(a => a.status === 'spare').length}
             </p>
           </div>
           <div className="p-4 rounded-lg bg-card border border-border">
@@ -265,6 +304,12 @@ export default function Assets() {
           onRowClick={(asset) => navigate(`/assets/${asset.id}`)}
         />
       </div>
+
+      <AssetFormDialog 
+        open={formOpen} 
+        onOpenChange={setFormOpen}
+        asset={editingAsset}
+      />
     </MainLayout>
   );
 }

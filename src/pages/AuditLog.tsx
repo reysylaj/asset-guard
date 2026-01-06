@@ -13,19 +13,18 @@ import {
 import { 
   Search, 
   Download,
-  Clock,
   Plus,
   RefreshCw,
   Trash2,
   UserPlus,
-  UserMinus
+  UserMinus,
+  Loader2
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { auditLogs } from '@/data/mockData';
-import type { AuditLog, AuditAction } from '@/types';
+import { useAuditLogs } from '@/hooks/useAuditLogs';
 import { cn } from '@/lib/utils';
 
-const actionIcons: Record<AuditAction, typeof Plus> = {
+const actionIcons: Record<string, typeof Plus> = {
   create: Plus,
   update: RefreshCw,
   delete: Trash2,
@@ -33,7 +32,7 @@ const actionIcons: Record<AuditAction, typeof Plus> = {
   unassign: UserMinus,
 };
 
-const actionColors: Record<AuditAction, string> = {
+const actionColors: Record<string, string> = {
   create: 'text-status-active bg-status-active/10',
   update: 'text-status-info bg-status-info/10',
   delete: 'text-status-danger bg-status-danger/10',
@@ -46,13 +45,15 @@ export default function AuditLog() {
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [entityFilter, setEntityFilter] = useState<string>('all');
 
+  const { data: auditLogs = [], isLoading } = useAuditLogs();
+
   const filteredLogs = auditLogs.filter(log => {
     const matchesSearch = 
-      log.entityId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.userId.toLowerCase().includes(searchQuery.toLowerCase());
+      log.entity_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.user_id.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesAction = actionFilter === 'all' || log.action === actionFilter;
-    const matchesEntity = entityFilter === 'all' || log.entityType === entityFilter;
+    const matchesEntity = entityFilter === 'all' || log.entity_type === entityFilter;
 
     return matchesSearch && matchesAction && matchesEntity;
   });
@@ -61,7 +62,7 @@ export default function AuditLog() {
     {
       key: 'timestamp',
       header: 'Time',
-      render: (log: AuditLog) => (
+      render: (log: any) => (
         <div>
           <p className="text-sm">{format(new Date(log.timestamp), 'MMM d, yyyy HH:mm')}</p>
           <p className="text-xs text-muted-foreground">
@@ -73,13 +74,13 @@ export default function AuditLog() {
     {
       key: 'action',
       header: 'Action',
-      render: (log: AuditLog) => {
-        const Icon = actionIcons[log.action];
+      render: (log: any) => {
+        const Icon = actionIcons[log.action] || RefreshCw;
         return (
           <div className="flex items-center gap-2">
             <div className={cn(
               "w-8 h-8 rounded-lg flex items-center justify-center",
-              actionColors[log.action]
+              actionColors[log.action] || 'text-muted-foreground bg-muted'
             )}>
               <Icon className="w-4 h-4" />
             </div>
@@ -89,43 +90,60 @@ export default function AuditLog() {
       },
     },
     {
-      key: 'entityType',
+      key: 'entity_type',
       header: 'Entity Type',
-      render: (log: AuditLog) => (
-        <span className="capitalize">{log.entityType}</span>
+      render: (log: any) => (
+        <span className="capitalize">{log.entity_type}</span>
       ),
     },
     {
-      key: 'entityId',
+      key: 'entity_id',
       header: 'Entity ID',
-      render: (log: AuditLog) => (
-        <span className="font-mono text-sm">{log.entityId}</span>
+      render: (log: any) => (
+        <span className="font-mono text-sm">{log.entity_id.slice(0, 8)}...</span>
       ),
     },
     {
-      key: 'userId',
+      key: 'user_id',
       header: 'User',
-      render: (log: AuditLog) => (
-        <span className="font-mono text-sm">{log.userId}</span>
+      render: (log: any) => (
+        <span className="font-mono text-sm">{log.user_id.slice(0, 8)}...</span>
       ),
     },
     {
       key: 'changes',
       header: 'Changes',
-      render: (log: AuditLog) => (
-        <div className="max-w-[300px]">
-          {Object.entries(log.changes).map(([field, { old: oldVal, new: newVal }]) => (
-            <div key={field} className="text-xs">
-              <span className="text-muted-foreground">{field}: </span>
-              <span className="text-status-danger">{String(oldVal) || 'null'}</span>
-              <span className="text-muted-foreground"> → </span>
-              <span className="text-status-active">{String(newVal) || 'null'}</span>
-            </div>
-          ))}
-        </div>
-      ),
+      render: (log: any) => {
+        const changes = log.changes as Record<string, { old: unknown; new: unknown }> | null;
+        if (!changes) return <span className="text-muted-foreground">—</span>;
+        return (
+          <div className="max-w-[300px]">
+            {Object.entries(changes).slice(0, 2).map(([field, val]) => (
+              <div key={field} className="text-xs">
+                <span className="text-muted-foreground">{field}: </span>
+                <span className="text-status-danger">{String((val as any)?.old ?? 'null')}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span className="text-status-active">{String((val as any)?.new ?? 'null')}</span>
+              </div>
+            ))}
+            {Object.keys(changes).length > 2 && (
+              <span className="text-xs text-muted-foreground">+{Object.keys(changes).length - 2} more</span>
+            )}
+          </div>
+        );
+      },
     },
   ];
+
+  if (isLoading) {
+    return (
+      <MainLayout title="Audit Log" subtitle="Complete record of all system changes">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout 

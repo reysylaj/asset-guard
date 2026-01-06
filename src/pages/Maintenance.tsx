@@ -20,11 +20,18 @@ import {
   RefreshCw,
   ArrowUpCircle,
   ClipboardCheck,
-  RotateCw
+  RotateCw,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { maintenanceEvents, assets } from '@/data/mockData';
-import type { MaintenanceEvent, MaintenanceType } from '@/types';
+import { useMaintenance } from '@/hooks/useMaintenance';
+import { useAssets } from '@/hooks/useAssets';
+import { useAuth } from '@/contexts/AuthContext';
+import { MaintenanceFormDialog } from '@/components/forms/MaintenanceFormDialog';
+import type { Database } from '@/integrations/supabase/types';
+
+type MaintenanceEvent = Database['public']['Tables']['maintenance_events']['Row'];
+type MaintenanceType = Database['public']['Enums']['maintenance_type'];
 
 const typeIcons: Record<MaintenanceType, typeof Wrench> = {
   formatting: RefreshCw,
@@ -32,6 +39,8 @@ const typeIcons: Record<MaintenanceType, typeof Wrench> = {
   upgrade: ArrowUpCircle,
   inspection: ClipboardCheck,
   replacement: RotateCw,
+  cleaning: RefreshCw,
+  security_update: ClipboardCheck,
 };
 
 const typeLabels: Record<MaintenanceType, string> = {
@@ -40,18 +49,27 @@ const typeLabels: Record<MaintenanceType, string> = {
   upgrade: 'Upgrade',
   inspection: 'Inspection',
   replacement: 'Replacement',
+  cleaning: 'Cleaning',
+  security_update: 'Security Update',
 };
 
 export default function Maintenance() {
+  const { hasAnyRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [formOpen, setFormOpen] = useState(false);
+
+  const { data: maintenanceEvents = [], isLoading } = useMaintenance();
+  const { data: assets = [] } = useAssets();
+
+  const canEdit = hasAnyRole(['it', 'admin']);
 
   const filteredEvents = maintenanceEvents.filter(event => {
-    const asset = assets.find(a => a.id === event.assetId);
+    const asset = assets.find(a => a.id === event.asset_id);
     
     const matchesSearch = 
-      asset?.assetId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.performedBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      asset?.asset_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.performed_by.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesType = typeFilter === 'all' || event.type === typeFilter;
@@ -74,7 +92,7 @@ export default function Maintenance() {
       key: 'type',
       header: 'Type',
       render: (event: MaintenanceEvent) => {
-        const Icon = typeIcons[event.type];
+        const Icon = typeIcons[event.type] || Wrench;
         return (
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4 text-muted-foreground" />
@@ -87,21 +105,21 @@ export default function Maintenance() {
       key: 'asset',
       header: 'Asset',
       render: (event: MaintenanceEvent) => {
-        const asset = assets.find(a => a.id === event.assetId);
+        const asset = assets.find(a => a.id === event.asset_id);
         if (!asset) return '—';
         return (
           <div>
-            <p className="font-mono text-sm">{asset.assetId}</p>
+            <p className="font-mono text-sm">{asset.asset_id}</p>
             <p className="text-xs text-muted-foreground">{asset.manufacturer} {asset.model}</p>
           </div>
         );
       },
     },
     {
-      key: 'performedBy',
+      key: 'performed_by',
       header: 'Performed By',
       render: (event: MaintenanceEvent) => (
-        <span className="text-sm">{event.performedBy}</span>
+        <span className="text-sm">{event.performed_by}</span>
       ),
     },
     {
@@ -114,10 +132,10 @@ export default function Maintenance() {
       ),
     },
     {
-      key: 'resultingHealth',
+      key: 'resulting_health',
       header: 'Resulting Health',
       render: (event: MaintenanceEvent) => (
-        <StatusBadge status={event.resultingHealth} />
+        <StatusBadge status={event.resulting_health || 'unknown'} />
       ),
     },
   ];
@@ -126,6 +144,16 @@ export default function Maintenance() {
     acc[event.type] = (acc[event.type] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  if (isLoading) {
+    return (
+      <MainLayout title="Maintenance" subtitle="Track all maintenance events and repairs">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout 
@@ -163,10 +191,12 @@ export default function Maintenance() {
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Log Event
-            </Button>
+            {canEdit && (
+              <Button size="sm" onClick={() => setFormOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Log Event
+              </Button>
+            )}
           </div>
         </div>
 
@@ -190,6 +220,11 @@ export default function Maintenance() {
           columns={columns}
         />
       </div>
+
+      <MaintenanceFormDialog 
+        open={formOpen} 
+        onOpenChange={setFormOpen}
+      />
     </MainLayout>
   );
 }

@@ -11,40 +11,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { 
   Plus, 
   Search, 
-  Filter, 
   Download,
   Eye,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { employees, assets, assignments } from '@/data/mockData';
-import type { Employee } from '@/types';
 import { useNavigate } from 'react-router-dom';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useAssignments } from '@/hooks/useAssignments';
+import { useAuth } from '@/contexts/AuthContext';
+import { EmployeeFormDialog } from '@/components/forms/EmployeeFormDialog';
+import type { Database } from '@/integrations/supabase/types';
+
+type Employee = Database['public']['Tables']['employees']['Row'];
 
 export default function Employees() {
   const navigate = useNavigate();
+  const { hasAnyRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
-  const departments = [...new Set(employees.map(e => e.department))];
+  const { data: employees = [], isLoading } = useEmployees();
+  const { data: assignments = [] } = useAssignments();
+
+  const canEdit = hasAnyRole(['hr', 'admin']);
+
+  const departments = [...new Set(employees.map(e => e.department).filter(Boolean))];
 
   const filteredEmployees = employees.filter(employee => {
     const matchesSearch = 
       employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.surname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      employee.badgeId.toLowerCase().includes(searchQuery.toLowerCase());
+      employee.badge_id.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || employee.status === statusFilter;
     const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
@@ -53,7 +58,7 @@ export default function Employees() {
   });
 
   const getEmployeeAssetCount = (employeeId: string) => {
-    return assignments.filter(a => a.employeeId === employeeId && !a.endDate).length;
+    return assignments.filter(a => a.employee_id === employeeId && a.status === 'active').length;
   };
 
   const columns = [
@@ -67,7 +72,7 @@ export default function Employees() {
           </div>
           <div>
             <p className="font-medium">{employee.name} {employee.surname}</p>
-            <p className="text-xs text-muted-foreground">{employee.badgeId}</p>
+            <p className="text-xs text-muted-foreground">{employee.badge_id}</p>
           </div>
         </div>
       ),
@@ -83,9 +88,9 @@ export default function Employees() {
       render: (employee: Employee) => <StatusBadge status={employee.status} />,
     },
     {
-      key: 'startDate',
+      key: 'start_date',
       header: 'Start Date',
-      render: (employee: Employee) => format(new Date(employee.startDate), 'MMM d, yyyy'),
+      render: (employee: Employee) => format(new Date(employee.start_date), 'MMM d, yyyy'),
     },
     {
       key: 'assets',
@@ -111,13 +116,33 @@ export default function Employees() {
           >
             <FileText className="w-4 h-4" />
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (canEdit) {
+                setEditingEmployee(employee);
+                setFormOpen(true);
+              }
+            }}
+          >
             <Eye className="w-4 h-4" />
           </Button>
         </div>
       ),
     },
   ];
+
+  if (isLoading) {
+    return (
+      <MainLayout title="Employees" subtitle="Manage employee records and assignments">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout 
@@ -155,7 +180,7 @@ export default function Employees() {
               <SelectContent>
                 <SelectItem value="all">All Departments</SelectItem>
                 {departments.map(dept => (
-                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  <SelectItem key={dept} value={dept!}>{dept}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -165,10 +190,12 @@ export default function Employees() {
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Employee
-            </Button>
+            {canEdit && (
+              <Button size="sm" onClick={() => { setEditingEmployee(null); setFormOpen(true); }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Employee
+              </Button>
+            )}
           </div>
         </div>
 
@@ -203,6 +230,12 @@ export default function Employees() {
           onRowClick={(employee) => navigate(`/employees/${employee.id}`)}
         />
       </div>
+
+      <EmployeeFormDialog 
+        open={formOpen} 
+        onOpenChange={setFormOpen}
+        employee={editingEmployee}
+      />
     </MainLayout>
   );
 }
