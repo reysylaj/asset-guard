@@ -3,7 +3,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Assets from "./pages/Assets";
 import Assignments from "./pages/Assignments";
@@ -19,26 +23,69 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/employees" element={<Employees />} />
-          <Route path="/assets" element={<Assets />} />
-          <Route path="/assignments" element={<Assignments />} />
-          <Route path="/maintenance" element={<Maintenance />} />
-          <Route path="/locations" element={<Locations />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/reports/employee/:id" element={<EmployeeReport />} />
-          <Route path="/reports/asset/:id" element={<AssetReport />} />
-          <Route path="/audit" element={<AuditLog />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/employees" element={
+              <ProtectedRoute>
+                <Employees />
+              </ProtectedRoute>
+            } />
+            <Route path="/assets" element={
+              <ProtectedRoute>
+                <Assets />
+              </ProtectedRoute>
+            } />
+            <Route path="/assignments" element={
+              <ProtectedRoute>
+                <Assignments />
+              </ProtectedRoute>
+            } />
+            <Route path="/maintenance" element={
+              <ProtectedRoute requiredRoles={['it', 'admin']}>
+                <Maintenance />
+              </ProtectedRoute>
+            } />
+            <Route path="/locations" element={
+              <ProtectedRoute>
+                <Locations />
+              </ProtectedRoute>
+            } />
+            <Route path="/reports" element={
+              <ProtectedRoute>
+                <Reports />
+              </ProtectedRoute>
+            } />
+            <Route path="/reports/employee/:id" element={
+              <ProtectedRoute>
+                <EmployeeReport />
+              </ProtectedRoute>
+            } />
+            <Route path="/reports/asset/:id" element={
+              <ProtectedRoute>
+                <AssetReport />
+              </ProtectedRoute>
+            } />
+            <Route path="/audit" element={
+              <ProtectedRoute requiredRoles={['auditor', 'admin']}>
+                <AuditLog />
+              </ProtectedRoute>
+            } />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

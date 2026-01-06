@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DataTable } from '@/components/ui/data-table';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -19,16 +18,23 @@ import {
   Warehouse,
   Server,
   LayoutGrid,
-  MapPin
+  Loader2
 } from 'lucide-react';
-import { locations, locationHistory, assets } from '@/data/mockData';
-import type { Location, LocationType } from '@/types';
+import { useLocations } from '@/hooks/useLocations';
+import { useAuth } from '@/contexts/AuthContext';
+import { LocationFormDialog } from '@/components/forms/LocationFormDialog';
+import type { Database } from '@/integrations/supabase/types';
+
+type Location = Database['public']['Tables']['locations']['Row'];
+type LocationType = Database['public']['Enums']['location_type'];
 
 const typeIcons: Record<LocationType, typeof Building2> = {
   office: Building2,
   storage: Warehouse,
   server_room: Server,
   rack: LayoutGrid,
+  warehouse: Warehouse,
+  remote: Building2,
 };
 
 const typeLabels: Record<LocationType, string> = {
@@ -36,11 +42,20 @@ const typeLabels: Record<LocationType, string> = {
   storage: 'Storage Room',
   server_room: 'Server Room',
   rack: 'Rack',
+  warehouse: 'Warehouse',
+  remote: 'Remote',
 };
 
 export default function Locations() {
+  const { hasAnyRole } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+
+  const { data: locations = [], isLoading } = useLocations();
+
+  const canEdit = hasAnyRole(['it', 'admin']);
 
   const filteredLocations = locations.filter(location => {
     const matchesSearch = 
@@ -52,16 +67,12 @@ export default function Locations() {
     return matchesSearch && matchesType;
   });
 
-  const getAssetCount = (locationId: string) => {
-    return locationHistory.filter(lh => lh.locationId === locationId && !lh.endDate).length;
-  };
-
   const columns = [
     {
       key: 'name',
       header: 'Location',
       render: (location: Location) => {
-        const Icon = typeIcons[location.type];
+        const Icon = typeIcons[location.type] || Building2;
         return (
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -81,7 +92,7 @@ export default function Locations() {
       key: 'type',
       header: 'Type',
       render: (location: Location) => (
-        <span className="text-sm">{typeLabels[location.type]}</span>
+        <span className="text-sm">{typeLabels[location.type] || location.type}</span>
       ),
     },
     {
@@ -92,17 +103,10 @@ export default function Locations() {
       ),
     },
     {
-      key: 'rackPosition',
+      key: 'rack_position',
       header: 'Position',
       render: (location: Location) => (
-        <span className="text-sm font-mono">{location.rackPosition || '—'}</span>
-      ),
-    },
-    {
-      key: 'assets',
-      header: 'Assets',
-      render: (location: Location) => (
-        <span className="text-sm font-medium">{getAssetCount(location.id)}</span>
+        <span className="text-sm font-mono">{location.rack_position || '—'}</span>
       ),
     },
   ];
@@ -111,6 +115,16 @@ export default function Locations() {
     acc[loc.type] = (acc[loc.type] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  if (isLoading) {
+    return (
+      <MainLayout title="Locations" subtitle="Manage physical locations and asset placement">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout 
@@ -148,10 +162,12 @@ export default function Locations() {
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Location
-            </Button>
+            {canEdit && (
+              <Button size="sm" onClick={() => { setEditingLocation(null); setFormOpen(true); }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Location
+              </Button>
+            )}
           </div>
         </div>
 
@@ -161,7 +177,7 @@ export default function Locations() {
             <p className="text-sm text-muted-foreground">Total Locations</p>
             <p className="text-2xl font-bold">{locations.length}</p>
           </div>
-          {Object.entries(typeLabels).map(([type, label]) => (
+          {Object.entries(typeLabels).slice(0, 4).map(([type, label]) => (
             <div key={type} className="p-4 rounded-lg bg-card border border-border">
               <p className="text-sm text-muted-foreground">{label}s</p>
               <p className="text-2xl font-bold">{typeCounts[type] || 0}</p>
@@ -173,8 +189,20 @@ export default function Locations() {
         <DataTable
           data={filteredLocations}
           columns={columns}
+          onRowClick={(location) => {
+            if (canEdit) {
+              setEditingLocation(location);
+              setFormOpen(true);
+            }
+          }}
         />
       </div>
+
+      <LocationFormDialog 
+        open={formOpen} 
+        onOpenChange={setFormOpen}
+        location={editingLocation}
+      />
     </MainLayout>
   );
 }

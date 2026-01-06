@@ -1,25 +1,48 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatCard } from '@/components/ui/stat-card';
-import { AssetTypeChart } from '@/components/dashboard/AssetTypeChart';
-import { StatusChart } from '@/components/dashboard/StatusChart';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { 
   Monitor, 
   Users, 
   AlertTriangle, 
   Package, 
-  Server,
-  TrendingUp
+  TrendingUp,
+  Loader2
 } from 'lucide-react';
-import { employees, assets, assignments, auditLogs } from '@/data/mockData';
+import { useDashboardStats } from '@/hooks/useDashboardStats';
+import { useAuditLogs } from '@/hooks/useAuditLogs';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export default function Dashboard() {
-  const activeEmployees = employees.filter(e => e.status === 'active').length;
-  const totalAssets = assets.length;
-  const assetsInUse = assets.filter(a => a.status === 'in_use').length;
-  const assetsInStock = assets.filter(a => a.status === 'in_stock').length;
-  const assetsUnderRepair = assets.filter(a => a.status === 'under_repair').length;
-  const activeAssignments = assignments.filter(a => !a.endDate).length;
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: auditLogs = [], isLoading: logsLoading } = useAuditLogs();
+
+  if (statsLoading) {
+    return (
+      <MainLayout title="Dashboard" subtitle="IT Asset Management Overview">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const recentLogs = auditLogs.slice(0, 10);
+  
+  // Transform stats for charts
+  const assetTypeData = stats?.assets?.byType 
+    ? Object.entries(stats.assets.byType).map(([name, value]) => ({ name, value }))
+    : [];
+  
+  const assetStatusData = stats?.assets?.byStatus
+    ? Object.entries(stats.assets.byStatus).map(([name, value]) => ({ name, value }))
+    : [];
+
+  const ownershipData = stats?.assets?.byOwnership
+    ? Object.entries(stats.assets.byOwnership).map(([name, value]) => ({ name, value }))
+    : [];
 
   return (
     <MainLayout 
@@ -31,26 +54,25 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Assets"
-            value={totalAssets}
-            subtitle={`${assetsInUse} in use`}
+            value={stats?.assets?.total || 0}
+            subtitle={`${stats?.assets?.byStatus?.in_use || 0} in use`}
             icon={Monitor}
-            trend={{ value: 12, label: 'vs last month', positive: true }}
           />
           <StatCard
             title="Active Employees"
-            value={activeEmployees}
-            subtitle={`${employees.length} total in system`}
+            value={stats?.employees?.active || 0}
+            subtitle={`${stats?.employees?.total || 0} total in system`}
             icon={Users}
           />
           <StatCard
             title="Assets in Stock"
-            value={assetsInStock}
+            value={stats?.assets?.byStatus?.spare || 0}
             subtitle="Ready for assignment"
             icon={Package}
           />
           <StatCard
             title="Under Repair"
-            value={assetsUnderRepair}
+            value={stats?.assets?.byStatus?.under_repair || 0}
             subtitle="Needs attention"
             icon={AlertTriangle}
           />
@@ -60,11 +82,29 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="p-6 rounded-xl bg-card border border-border">
             <h3 className="text-lg font-semibold mb-4">Assets by Type</h3>
-            <AssetTypeChart assets={assets} />
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={assetTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                  {assetTypeData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
           <div className="p-6 rounded-xl bg-card border border-border">
             <h3 className="text-lg font-semibold mb-4">Assets by Status</h3>
-            <StatusChart assets={assets} />
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={assetStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                  {assetStatusData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -76,28 +116,42 @@ export default function Dashboard() {
               <h3 className="text-lg font-semibold">Recent Activity</h3>
               <button className="text-sm text-primary hover:underline">View all</button>
             </div>
-            <RecentActivity logs={auditLogs} />
+            {logsLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentLogs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No recent activity</p>
+                ) : (
+                  recentLogs.map(log => (
+                    <div key={log.id} className="flex items-center gap-3 text-sm">
+                      <span className="capitalize font-medium">{log.action}</span>
+                      <span className="text-muted-foreground">{log.entity_type}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           {/* Quick Stats */}
           <div className="p-6 rounded-xl bg-card border border-border">
             <h3 className="text-lg font-semibold mb-4">Asset Ownership</h3>
             <div className="space-y-4">
-              {['TinextaCyber', 'FDM', 'ServiceFactory'].map((owner) => {
-                const count = assets.filter(a => a.ownership === owner).length;
-                const percentage = Math.round((count / totalAssets) * 100);
+              {ownershipData.map((item) => {
+                const total = stats?.assets?.total || 1;
+                const percentage = Math.round((item.value / total) * 100);
                 return (
-                  <div key={owner} className="space-y-2">
+                  <div key={item.name} className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{owner}</span>
-                      <span className="font-medium">{count} assets</span>
+                      <span className="text-muted-foreground capitalize">{item.name}</span>
+                      <span className="font-medium">{item.value} assets</span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div 
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          owner === 'TinextaCyber' ? 'bg-ownership-tinexta' :
-                          owner === 'FDM' ? 'bg-ownership-fdm' : 'bg-ownership-servicefactory'
-                        }`}
+                        className="h-full rounded-full transition-all duration-500 bg-primary"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -112,7 +166,7 @@ export default function Dashboard() {
                   <TrendingUp className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{activeAssignments}</p>
+                  <p className="text-2xl font-bold">{stats?.assignments?.active || 0}</p>
                   <p className="text-xs text-muted-foreground">Active Assignments</p>
                 </div>
               </div>

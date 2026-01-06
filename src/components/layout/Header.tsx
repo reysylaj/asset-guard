@@ -1,4 +1,4 @@
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, LogOut, Settings, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -9,6 +9,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/contexts/AuthContext';
+import { Badge } from '@/components/ui/badge';
 
 interface HeaderProps {
   title: string;
@@ -16,6 +18,15 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const { user, profile, roles, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  const displayName = (profile as any)?.display_name || user?.email?.split('@')[0] || 'User';
+  const email = user?.email || '';
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
       <div>
@@ -51,18 +62,36 @@ export function Header({ title, subtitle }: HeaderProps) {
               </div>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuLabel>
-              <div className="flex flex-col">
-                <span>Admin User</span>
-                <span className="text-xs font-normal text-muted-foreground">admin@company.com</span>
+              <div className="flex flex-col gap-1">
+                <span className="font-medium">{displayName}</span>
+                <span className="text-xs font-normal text-muted-foreground">{email}</span>
+                {roles.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {roles.map(role => (
+                      <Badge key={role} variant="secondary" className="text-xs capitalize">
+                        {role}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem>
+              <UserCircle className="w-4 h-4 mr-2" />
+              Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Log out</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Log out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
