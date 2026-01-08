@@ -1,12 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Pencil } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -35,6 +29,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useAssignments } from '@/hooks/useAssignments';
 import { useAuth } from '@/contexts/AuthContext';
 import { EmployeeFormDialog } from '@/components/forms/EmployeeFormDialog';
+import { EmployeeDetailsDialog } from '@/components/employees/EmployeeDetailsDialog';
 import type { Database } from '@/integrations/supabase/types';
 
 type Employee = Database['public']['Tables']['employees']['Row'];
@@ -291,44 +286,11 @@ export default function Employees() {
         onOpenChange={setFormOpen}
         employee={editingEmployee}
       />
-      {viewEmployee && (
-      <Dialog open onOpenChange={() => setViewEmployee(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Employee Details</DialogTitle>
-          </DialogHeader>
-
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Name</span>
-              <p className="font-medium">
-                {viewEmployee.name} {viewEmployee.surname}
-              </p>
-            </div>
-
-            <div>
-              <span className="text-muted-foreground">Badge ID</span>
-              <p className="font-mono">{viewEmployee.badge_id}</p>
-            </div>
-
-            <div>
-              <span className="text-muted-foreground">Department</span>
-              <p>{viewEmployee.department}</p>
-            </div>
-
-            <div>
-              <span className="text-muted-foreground">Status</span>
-              <StatusBadge status={viewEmployee.status} />
-            </div>
-
-            <div>
-              <span className="text-muted-foreground">Start Date</span>
-              <p>{format(new Date(viewEmployee.start_date), 'yyyy-MM-dd')}</p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    )}
+      <EmployeeDetailsDialog
+        open={!!viewEmployee}
+        onOpenChange={(open) => !open && setViewEmployee(null)}
+        employee={viewEmployee}
+      />
 
     </MainLayout>
   );
