@@ -33,8 +33,6 @@ const typeIcons: Record<LocationType, typeof Building2> = {
   storage: Warehouse,
   server_room: Server,
   rack: LayoutGrid,
-  warehouse: Warehouse,
-  remote: Building2,
 };
 
 const typeLabels: Record<LocationType, string> = {
@@ -42,8 +40,6 @@ const typeLabels: Record<LocationType, string> = {
   storage: 'Storage Room',
   server_room: 'Server Room',
   rack: 'Rack',
-  warehouse: 'Warehouse',
-  remote: 'Remote',
 };
 
 export default function Locations() {

@@ -39,8 +39,6 @@ const typeIcons: Record<MaintenanceType, typeof Wrench> = {
   upgrade: ArrowUpCircle,
   inspection: ClipboardCheck,
   replacement: RotateCw,
-  cleaning: RefreshCw,
-  security_update: ClipboardCheck,
 };
 
 const typeLabels: Record<MaintenanceType, string> = {
@@ -49,8 +47,6 @@ const typeLabels: Record<MaintenanceType, string> = {
   upgrade: 'Upgrade',
   inspection: 'Inspection',
   replacement: 'Replacement',
-  cleaning: 'Cleaning',
-  security_update: 'Security Update',
 };
 
 export default function Maintenance() {
@@ -59,7 +55,8 @@ export default function Maintenance() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
 
-  const { data: maintenanceEvents = [], isLoading } = useMaintenance();
+  const maintenance = useMaintenance();
+  const { data: maintenanceEvents = [], isLoading } = maintenance.list;
   const { data: assets = [] } = useAssets();
 
   const canEdit = hasAnyRole(['it', 'admin']);
