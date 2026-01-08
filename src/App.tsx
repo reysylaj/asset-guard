@@ -45,19 +45,11 @@ const App = () => (
                 <Assets />
               </ProtectedRoute>
             } />
-
-            <Route
-              path="/assets/:id"
-              element={
-                <ProtectedRoute>
-                  <AssetDetails />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route path="*" element={<NotFound />} />
-
-            
+            <Route path="/assets/:id" element={
+              <ProtectedRoute>
+                <AssetDetails />
+              </ProtectedRoute>
+            } />
             <Route path="/assignments" element={
               <ProtectedRoute>
                 <Assignments />
@@ -83,13 +75,11 @@ const App = () => (
                 <EmployeeReport />
               </ProtectedRoute>
             } />
-            
             <Route path="/audit" element={
               <ProtectedRoute requiredRoles={['auditor', 'admin']}>
                 <AuditLog />
               </ProtectedRoute>
             } />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
