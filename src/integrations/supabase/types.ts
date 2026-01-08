@@ -142,6 +142,8 @@ export type Database = {
           accepted_at: string | null
           accepted_by: string | null
           asset_id: string
+          change_reason: string | null
+          change_type: string | null
           created_at: string
           created_by: string | null
           damage_notes: string | null
@@ -162,6 +164,8 @@ export type Database = {
           accepted_at?: string | null
           accepted_by?: string | null
           asset_id: string
+          change_reason?: string | null
+          change_type?: string | null
           created_at?: string
           created_by?: string | null
           damage_notes?: string | null
@@ -182,6 +186,8 @@ export type Database = {
           accepted_at?: string | null
           accepted_by?: string | null
           asset_id?: string
+          change_reason?: string | null
+          change_type?: string | null
           created_at?: string
           created_by?: string | null
           damage_notes?: string | null

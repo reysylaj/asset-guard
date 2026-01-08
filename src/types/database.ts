@@ -176,6 +176,10 @@ export interface Assignment {
   damage_notes: string | null;
   requires_formatting: boolean;
   
+  // Change tracking
+  change_type: string | null;
+  change_reason: string | null;
+  
   notes: string | null;
   created_at: string;
   created_by: string | null;

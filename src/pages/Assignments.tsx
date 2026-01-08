@@ -29,8 +29,11 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useAssets } from '@/hooks/useAssets';
 import { useAuth } from '@/contexts/AuthContext';
 import { AssignmentFormDialog } from '@/components/forms/AssignmentFormDialog';
+import type { AssignmentWithRelations } from '@/types/database';
+import { Eye, Pencil, FileText, RotateCcw } from 'lucide-react';
+import { ReturnAssetDialog } from '@/components/assignments/ReturnAssetDialog';
+
 import type { Database } from '@/integrations/supabase/types';
-import { Eye, Pencil, FileText } from 'lucide-react';
 
 type Assignment = Database['public']['Tables']['assignments']['Row'];
 
@@ -42,6 +45,8 @@ export default function Assignments() {
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returningAssignment, setReturningAssignment] = useState<any>(null);
 
 
 
@@ -118,19 +123,41 @@ export default function Assignments() {
     {
       key: 'actions',
       header: '',
-      render: (assignment: Assignment) => (
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditingAssignment(assignment);
-            setFormOpen(true);
-          }}
-        >
-          <Pencil className="w-4 h-4" />
-        </Button>
-      ),
+      render: (assignment: Assignment) => {
+        const isActive = assignment.status === 'active' || assignment.status === 'pending_acceptance';
+        const asset = assets.find(a => a.id === assignment.asset_id);
+        const employee = employees.find(e => e.id === assignment.employee_id);
+        
+        return (
+          <div className="flex items-center gap-1">
+            {canEdit && isActive && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReturningAssignment({ ...assignment, asset, employee });
+                  setReturnDialogOpen(true);
+                }}
+              >
+                <RotateCcw className="w-4 h-4 mr-1" />
+                Return
+              </Button>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingAssignment(assignment);
+                setFormOpen(true);
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          </div>
+        );
+      },
     },
     {
       key: 'asset',
@@ -303,6 +330,12 @@ export default function Assignments() {
         assignment={selectedAssignment}
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
+      />
+
+      <ReturnAssetDialog
+        open={returnDialogOpen}
+        onOpenChange={setReturnDialogOpen}
+        assignment={returningAssignment}
       />
 
     </MainLayout>
