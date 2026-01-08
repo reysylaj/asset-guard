@@ -9,16 +9,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLocations } from '@/hooks/useLocations';
 import type { Database } from '@/integrations/supabase/types';
+import { useCreateLocation, useUpdateLocation } from '@/hooks/useLocations';
 
 type Location = Database['public']['Tables']['locations']['Row'];
 
 const locationSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  type: z.enum(['office', 'storage', 'server_room', 'rack', 'warehouse', 'remote']),
+  name: z.string().min(1).max(100),
+  type: z.enum(['office', 'storage', 'server_room', 'rack']),
   building: z.string().optional(),
   floor: z.string().optional(),
   rack_position: z.string().optional(),
 });
+
 
 type LocationFormData = z.infer<typeof locationSchema>;
 
@@ -29,7 +31,9 @@ interface LocationFormDialogProps {
 }
 
 export function LocationFormDialog({ open, onOpenChange, location }: LocationFormDialogProps) {
-  const { createLocation, updateLocation } = useLocations();
+  const createLocation = useCreateLocation();
+  const updateLocation = useUpdateLocation();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<LocationFormData>({
@@ -51,18 +55,33 @@ export function LocationFormDialog({ open, onOpenChange, location }: LocationFor
 
   const onSubmit = async (data: LocationFormData) => {
     setIsSubmitting(true);
+
+    const payload = {
+      name: data.name,
+      type: data.type as Database['public']['Enums']['location_type'],
+      building: data.building || null,
+      floor: data.floor || null,
+      rack_position: data.rack_position || null,
+    };
+
     try {
       if (location) {
-        await updateLocation.mutateAsync({ id: location.id, ...data });
+        await updateLocation.mutateAsync({
+          id: location.id,
+          ...payload,
+        });
       } else {
-        await createLocation.mutateAsync(data);
+        await createLocation.mutateAsync(payload);
       }
+
       onOpenChange(false);
       form.reset();
     } finally {
       setIsSubmitting(false);
     }
   };
+
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,8 +101,6 @@ export function LocationFormDialog({ open, onOpenChange, location }: LocationFor
                 <SelectItem value="storage">Storage</SelectItem>
                 <SelectItem value="server_room">Server Room</SelectItem>
                 <SelectItem value="rack">Rack</SelectItem>
-                <SelectItem value="warehouse">Warehouse</SelectItem>
-                <SelectItem value="remote">Remote</SelectItem>
               </SelectContent>
             </Select>
           </div>

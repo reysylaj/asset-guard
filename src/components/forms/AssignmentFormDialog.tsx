@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useEffect } from 'react';
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -19,9 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAssignments } from '@/hooks/useAssignments';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useAssets } from '@/hooks/useAssets';
+import { useCreateAssignment, useUpdateAssignment } from '@/hooks/useAssignments';
+
 
 const assignmentSchema = z.object({
   employee_id: z.string().min(1, 'Employee is required'),
@@ -35,31 +38,79 @@ type AssignmentFormData = z.infer<typeof assignmentSchema>;
 interface AssignmentFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  assignment?: {
+    id: string;
+    employee_id: string;
+    asset_id: string;
+    start_date: string;
+    notes: string | null;
+  } | null;
 }
 
-export function AssignmentFormDialog({ open, onOpenChange }: AssignmentFormDialogProps) {
-  const { createAssignment } = useAssignments();
+export function AssignmentFormDialog({ open, onOpenChange, assignment }: AssignmentFormDialogProps) {
+  const createAssignment = useCreateAssignment();
+  const updateAssignment = useUpdateAssignment();
   const { data: employees = [] } = useEmployees();
   const { data: assets = [] } = useAssets();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeEmployees = employees.filter(e => e.status === 'active');
-  const availableAssets = assets.filter(a => a.status === 'spare' || a.status === 'ordered');
+  const availableAssets = assets.filter(
+    a => a.status !== 'retired' && a.status !== 'disposed'
+  );
+
 
   const form = useForm<AssignmentFormData>({
     resolver: zodResolver(assignmentSchema),
-    defaultValues: {
-      employee_id: '',
-      asset_id: '',
-      start_date: new Date().toISOString().split('T')[0],
-      notes: '',
-    },
+    defaultValues: assignment
+      ? {
+          employee_id: assignment.employee_id,
+          asset_id: assignment.asset_id,
+          start_date: assignment.start_date,
+          notes: assignment.notes ?? '',
+        }
+      : {
+          employee_id: '',
+          asset_id: '',
+          start_date: new Date().toISOString().split('T')[0],
+          notes: '',
+        },
   });
+
+  useEffect(() => {
+    if (assignment) {
+      form.reset({
+        employee_id: assignment.employee_id,
+        asset_id: assignment.asset_id,
+        start_date: assignment.start_date,
+        notes: assignment.notes ?? '',
+      });
+    }
+  }, [assignment, form]);
+
+
 
   const onSubmit = async (data: AssignmentFormData) => {
     setIsSubmitting(true);
     try {
-      await createAssignment.mutateAsync(data);
+      if (assignment) {
+        await updateAssignment.mutateAsync({
+          id: assignment.id,
+          employee_id: data.employee_id!,
+          asset_id: data.asset_id!,
+          start_date: data.start_date,
+          notes: data.notes,
+        });
+
+      } else {
+        await createAssignment.mutateAsync({
+          employee_id: data.employee_id!,
+          asset_id: data.asset_id!,
+          start_date: data.start_date,
+          notes: data.notes,
+        });
+      }
+
       onOpenChange(false);
       form.reset();
     } finally {
@@ -71,7 +122,7 @@ export function AssignmentFormDialog({ open, onOpenChange }: AssignmentFormDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>New Assignment</DialogTitle>
+          <DialogTitle>{assignment ? 'Edit Assignment' : 'New Assignment'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
@@ -81,7 +132,7 @@ export function AssignmentFormDialog({ open, onOpenChange }: AssignmentFormDialo
               <SelectContent>
                 {activeEmployees.map(emp => (
                   <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name} {emp.surname} ({emp.badge_id})
+                    {emp.name} {emp.surname}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -92,7 +143,11 @@ export function AssignmentFormDialog({ open, onOpenChange }: AssignmentFormDialo
           </div>
           <div className="space-y-2">
             <Label>Asset</Label>
-            <Select value={form.watch('asset_id')} onValueChange={(v) => form.setValue('asset_id', v)}>
+            <Select
+              value={form.watch('asset_id')}
+              onValueChange={(v) => form.setValue('asset_id', v)}
+            >
+
               <SelectTrigger><SelectValue placeholder="Select asset" /></SelectTrigger>
               <SelectContent>
                 {availableAssets.map(asset => (
@@ -117,7 +172,9 @@ export function AssignmentFormDialog({ open, onOpenChange }: AssignmentFormDialo
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create Assignment'}
+              {isSubmitting
+                ? assignment ? 'Updating...' : 'Creating...'
+                : assignment ? 'Update Assignment' : 'Create Assignment'}
             </Button>
           </div>
         </form>

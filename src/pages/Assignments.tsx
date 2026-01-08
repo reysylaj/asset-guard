@@ -4,6 +4,10 @@ import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { AssignmentDetailsDialog } from '@/components/assignments/AssignmentDetailsDialog';
+
 import {
   Select,
   SelectContent,
@@ -26,6 +30,7 @@ import { useAssets } from '@/hooks/useAssets';
 import { useAuth } from '@/contexts/AuthContext';
 import { AssignmentFormDialog } from '@/components/forms/AssignmentFormDialog';
 import type { Database } from '@/integrations/supabase/types';
+import { Eye, Pencil, FileText } from 'lucide-react';
 
 type Assignment = Database['public']['Tables']['assignments']['Row'];
 
@@ -34,6 +39,12 @@ export default function Assignments() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+
+
+
 
   const { data: assignments = [], isLoading } = useAssignments();
   const { data: employees = [] } = useEmployees();
@@ -50,13 +61,39 @@ export default function Assignments() {
       employee?.surname.toLowerCase().includes(searchQuery.toLowerCase()) ||
       asset?.asset_id.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = 
-      statusFilter === 'all' || 
-      (statusFilter === 'active' && assignment.status === 'active') ||
-      (statusFilter === 'returned' && assignment.status === 'returned');
+    const isReturned = Boolean(assignment.end_date);
+
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && !isReturned) ||
+      (statusFilter === 'returned' && isReturned);
+
 
     return matchesSearch && matchesStatus;
   });
+  const handleExport = () => {
+  const doc = new jsPDF();
+
+  autoTable(doc, {
+    head: [['Employee', 'Asset', 'Status', 'Start Date', 'End Date', 'Notes']],
+    body: filteredAssignments.map(a => {
+      const emp = employees.find(e => e.id === a.employee_id);
+      const asset = assets.find(as => as.id === a.asset_id);
+
+      return [
+        emp ? `${emp.name} ${emp.surname}` : '—',
+        asset ? asset.asset_id : '—',
+        a.end_date ? 'Returned' : 'Active',
+        format(new Date(a.start_date), 'yyyy-MM-dd'),
+        a.end_date ? format(new Date(a.end_date), 'yyyy-MM-dd') : '—',
+        a.notes ?? '—'
+      ];
+    })
+  });
+
+  doc.save('assignments.pdf');
+};
+
 
   const columns = [
     {
@@ -77,6 +114,23 @@ export default function Assignments() {
           </div>
         );
       },
+    },
+    {
+      key: 'actions',
+      header: '',
+      render: (assignment: Assignment) => (
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingAssignment(assignment);
+            setFormOpen(true);
+          }}
+        >
+          <Pencil className="w-4 h-4" />
+        </Button>
+      ),
     },
     {
       key: 'asset',
@@ -150,8 +204,10 @@ export default function Assignments() {
     },
   ];
 
-  const activeCount = assignments.filter(a => a.status === 'active').length;
-  const returnedCount = assignments.filter(a => a.status === 'returned').length;
+  const activeCount = assignments.filter(a => !a.end_date).length;
+  const returnedCount = assignments.filter(a => Boolean(a.end_date)).length;
+  
+
 
   if (isLoading) {
     return (
@@ -194,7 +250,7 @@ export default function Assignments() {
             </Select>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
@@ -227,13 +283,28 @@ export default function Assignments() {
         <DataTable
           data={filteredAssignments}
           columns={columns}
+          onRowClick={(a) => {
+            setSelectedAssignment(a);
+            setDetailsOpen(true);
+          }}
         />
       </div>
 
-      <AssignmentFormDialog 
-        open={formOpen} 
-        onOpenChange={setFormOpen}
+      <AssignmentFormDialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditingAssignment(null);
+        }}
+        assignment={editingAssignment}
       />
+
+      <AssignmentDetailsDialog
+        assignment={selectedAssignment}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+      />
+
     </MainLayout>
   );
 }

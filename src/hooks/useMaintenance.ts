@@ -142,3 +142,13 @@ export function useLogFormatting() {
     },
   });
 }
+
+
+export function useMaintenance() {
+  return {
+    list: useMaintenanceEvents(),
+    getById: useMaintenanceEvent,
+    getByAsset: useAssetMaintenanceHistory,
+    create: useCreateMaintenanceEvent(),
+  };
+}

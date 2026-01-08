@@ -110,7 +110,7 @@ export default function Auth() {
           <Shield className="w-7 h-7 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">AssetTrack</h1>
+          <h1 className="text-2xl font-bold text-foreground">AssetTrack ServiceFactory</h1>
           <p className="text-xs text-muted-foreground">IT Asset Management System</p>
         </div>
       </div>

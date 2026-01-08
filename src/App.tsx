@@ -15,7 +15,7 @@ import Maintenance from "./pages/Maintenance";
 import Locations from "./pages/Locations";
 import Reports from "./pages/Reports";
 import EmployeeReport from "./pages/EmployeeReport";
-import AssetReport from "./pages/AssetReport";
+import AssetDetails from '@/pages/AssetDetails';
 import AuditLog from "./pages/AuditLog";
 import NotFound from "./pages/NotFound";
 
@@ -45,6 +45,19 @@ const App = () => (
                 <Assets />
               </ProtectedRoute>
             } />
+
+            <Route
+              path="/assets/:id"
+              element={
+                <ProtectedRoute>
+                  <AssetDetails />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route path="*" element={<NotFound />} />
+
+            
             <Route path="/assignments" element={
               <ProtectedRoute>
                 <Assignments />
@@ -70,11 +83,7 @@ const App = () => (
                 <EmployeeReport />
               </ProtectedRoute>
             } />
-            <Route path="/reports/asset/:id" element={
-              <ProtectedRoute>
-                <AssetReport />
-              </ProtectedRoute>
-            } />
+            
             <Route path="/audit" element={
               <ProtectedRoute requiredRoles={['auditor', 'admin']}>
                 <AuditLog />

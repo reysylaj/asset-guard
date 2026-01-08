@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+
 import { z } from 'zod';
 import {
   Dialog,
@@ -11,6 +12,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useEffect } from 'react';
+
 import {
   Select,
   SelectContent,
@@ -18,10 +21,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAssets } from '@/hooks/useAssets';
+import { useCreateAsset, useUpdateAsset } from '@/hooks/useAssets';
+import { OWNERSHIP_OPTIONS } from '@/constants/ownership';
 import type { Database } from '@/integrations/supabase/types';
 
-type Asset = Database['public']['Tables']['assets']['Row'];
+export type AssetFormAsset = Pick<
+  Database['public']['Tables']['assets']['Row'],
+  | 'id'
+  | 'asset_id'
+  | 'type'
+  | 'manufacturer'
+  | 'model'
+  | 'serial_number'
+  | 'hostname'
+  | 'status'
+  | 'ownership'
+  | 'purchase_date'
+  | 'warranty_expiry'
+  | 'purchase_cost'
+>;
+
+
 
 const assetSchema = z.object({
   asset_id: z.string().min(1, 'Asset ID is required').max(50),
@@ -31,7 +51,10 @@ const assetSchema = z.object({
   serial_number: z.string().min(1, 'Serial number is required').max(100),
   hostname: z.string().optional(),
   status: z.enum(['planned', 'ordered', 'in_use', 'spare', 'under_repair', 'quarantined', 'retired', 'disposed']),
-  ownership: z.enum(['company', 'leased', 'personal']),
+  
+
+  ownership: z.enum(OWNERSHIP_OPTIONS),
+
   purchase_date: z.string().min(1, 'Purchase date is required'),
   warranty_expiry: z.string().min(1, 'Warranty expiry is required'),
   purchase_cost: z.coerce.number().optional(),
@@ -42,11 +65,13 @@ type AssetFormData = z.infer<typeof assetSchema>;
 interface AssetFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  asset: Asset | null;
+  asset: AssetFormAsset  | null;
 }
 
 export function AssetFormDialog({ open, onOpenChange, asset }: AssetFormDialogProps) {
-  const { createAsset, updateAsset } = useAssets();
+  const createAsset = useCreateAsset();
+  const updateAsset = useUpdateAsset();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<AssetFormData>({
@@ -71,11 +96,30 @@ export function AssetFormDialog({ open, onOpenChange, asset }: AssetFormDialogPr
       serial_number: '',
       hostname: '',
       status: 'spare',
-      ownership: 'company',
+      ownership: 'TinextaCyber',
       purchase_date: new Date().toISOString().split('T')[0],
       warranty_expiry: new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     },
   });
+
+  useEffect(() => {
+  if (asset) {
+    form.reset({
+      asset_id: asset.asset_id,
+      type: asset.type,
+      manufacturer: asset.manufacturer,
+      model: asset.model,
+      serial_number: asset.serial_number,
+      hostname: asset.hostname || '',
+      status: asset.status,
+      ownership: asset.ownership,
+      purchase_date: asset.purchase_date,
+      warranty_expiry: asset.warranty_expiry,
+      purchase_cost: asset.purchase_cost || undefined,
+    });
+  }
+}, [asset, form]);
+
 
   const onSubmit = async (data: AssetFormData) => {
     setIsSubmitting(true);
@@ -157,9 +201,11 @@ export function AssetFormDialog({ open, onOpenChange, asset }: AssetFormDialogPr
               <Select value={form.watch('ownership')} onValueChange={(v) => form.setValue('ownership', v as AssetFormData['ownership'])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="company">Company</SelectItem>
-                  <SelectItem value="leased">Leased</SelectItem>
-                  <SelectItem value="personal">Personal</SelectItem>
+                  {OWNERSHIP_OPTIONS.map(owner => (
+                    <SelectItem key={owner} value={owner}>
+                      {owner}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -4,14 +4,24 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Printer, Download, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
-import { employees, assets, assignments, maintenanceEvents } from '@/data/mockData';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useAssignments } from '@/hooks/useAssignments';
+import { useAssets } from '@/hooks/useAssets';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 import { useNavigate } from 'react-router-dom';
 
 export default function EmployeeReport() {
   const { id } = useParams();
   const navigate = useNavigate();
   
+  const { data: employees = [] } = useEmployees();
+  const { data: assignments = [] } = useAssignments();
+  const { data: assets = [] } = useAssets();
+
   const employee = employees.find(e => e.id === id);
+
   
   if (!employee) {
     return (
@@ -27,15 +37,131 @@ export default function EmployeeReport() {
     );
   }
 
-  const employeeAssignments = assignments.filter(a => a.employeeId === employee.id);
-  const currentAssignments = employeeAssignments.filter(a => !a.endDate);
-  const pastAssignments = employeeAssignments.filter(a => a.endDate);
+  const employeeAssignments = assignments.filter(a => a.employee_id === employee.id);
+  const currentAssignments = employeeAssignments.filter(a => !a.end_date);
+  const pastAssignments = employeeAssignments.filter(a => a.end_date);
 
   const getAsset = (assetId: string) => assets.find(a => a.id === assetId);
 
   const handlePrint = () => {
     window.print();
   };
+
+  const handleDownloadPdf = () => {
+  if (!employee) return;
+
+  const doc = new jsPDF();
+  let cursorY = 20;
+
+  // ===== TITLE =====
+  doc.setFontSize(16);
+  doc.text('Employee Asset Report', 14, cursorY);
+  cursorY += 8;
+
+  doc.setFontSize(10);
+  doc.text(`Generated on: ${format(new Date(), 'MMMM d, yyyy')}`, 14, cursorY);
+  cursorY += 6;
+  doc.text(`Employee: ${employee.name} ${employee.surname}`, 14, cursorY);
+  cursorY += 6;
+  doc.text(`Department: ${employee.department}`, 14, cursorY);
+  cursorY += 6;
+  doc.text(`Status: ${employee.status}`, 14, cursorY);
+  cursorY += 10;
+
+  // ===== EMPLOYEE INFO TABLE =====
+  autoTable(doc, {
+    startY: cursorY,
+    head: [['Field', 'Value']],
+    body: [
+      ['Full Name', `${employee.name} ${employee.surname}`],
+      ['Badge ID', employee.badge_id],
+      ['Health Card ID', employee.health_card_id || '—'],
+      ['Start Date', format(new Date(employee.start_date), 'yyyy-MM-dd')],
+      [
+        'End Date',
+        employee.end_date
+          ? format(new Date(employee.end_date), 'yyyy-MM-dd')
+          : '—',
+      ],
+    ],
+  });
+
+  cursorY = (doc as any).lastAutoTable.finalY + 12;
+
+  // ===== CURRENT ASSETS =====
+  doc.setFontSize(13);
+  doc.text(
+    `Currently Assigned Assets (${currentAssignments.length})`,
+    14,
+    cursorY
+  );
+  cursorY += 8;
+
+  if (currentAssignments.length === 0) {
+    doc.setFontSize(10);
+    doc.text('No assets currently assigned', 14, cursorY);
+    cursorY += 10;
+  } else {
+    autoTable(doc, {
+      startY: cursorY,
+      head: [['Asset ID', 'Type', 'Model', 'Serial', 'Assigned Since']],
+      body: currentAssignments.map(a => {
+        const asset = getAsset(a.asset_id)!;
+        return [
+          asset.asset_id,
+          asset.type,
+          `${asset.manufacturer} ${asset.model}`,
+          asset.serial_number,
+          format(new Date(a.start_date), 'yyyy-MM-dd'),
+        ];
+      }),
+    });
+
+    cursorY = (doc as any).lastAutoTable.finalY + 12;
+  }
+
+  // ===== HISTORICAL ASSETS =====
+  doc.setFontSize(13);
+  doc.text(
+    `Historical Asset Assignments (${pastAssignments.length})`,
+    14,
+    cursorY
+  );
+  cursorY += 8;
+
+  if (pastAssignments.length === 0) {
+    doc.setFontSize(10);
+    doc.text('No historical assignments', 14, cursorY);
+    cursorY += 10;
+  } else {
+    autoTable(doc, {
+      startY: cursorY,
+      head: [['Asset ID', 'Type', 'Model', 'Period']],
+      body: pastAssignments.map(a => {
+        const asset = getAsset(a.asset_id)!;
+        return [
+          asset.asset_id,
+          asset.type,
+          `${asset.manufacturer} ${asset.model}`,
+          `${format(new Date(a.start_date), 'yyyy-MM-dd')} → ${format(
+            new Date(a.end_date!),
+            'yyyy-MM-dd'
+          )}`,
+        ];
+      }),
+    });
+
+    cursorY = (doc as any).lastAutoTable.finalY + 12;
+  }
+
+  // ===== SAVE =====
+  doc.save(
+    `employee-${employee.name}-${employee.surname}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.pdf`
+  );
+};
+
 
   return (
     <MainLayout 
@@ -54,7 +180,7 @@ export default function EmployeeReport() {
               <Printer className="w-4 h-4 mr-2" />
               Print
             </Button>
-            <Button>
+            <Button onClick={handleDownloadPdf}>
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
@@ -97,17 +223,17 @@ export default function EmployeeReport() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Badge ID</p>
-                <p className="font-mono">{employee.badgeId}</p>
+                <p className="font-mono">{employee.badge_id}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Health Card ID</p>
-                <p className="font-mono">{employee.healthCardId}</p>
+                <p className="font-mono">{employee.health_card_id}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Employment Period</p>
                 <p className="font-medium">
-                  {format(new Date(employee.startDate), 'MMM d, yyyy')}
-                  {employee.endDate && ` - ${format(new Date(employee.endDate), 'MMM d, yyyy')}`}
+                  {format(new Date(employee.start_date), 'MMM d, yyyy')}
+                  {employee.end_date && ` - ${format(new Date(employee.end_date), 'MMM d, yyyy')}`}
                 </p>
               </div>
             </div>
@@ -131,15 +257,15 @@ export default function EmployeeReport() {
                 </thead>
                 <tbody>
                   {currentAssignments.map(assignment => {
-                    const asset = getAsset(assignment.assetId);
+                    const asset = getAsset(assignment.asset_id);
                     if (!asset) return null;
                     return (
                       <tr key={assignment.id}>
-                        <td className="font-mono text-sm">{asset.assetId}</td>
+                        <td className="font-mono text-sm">{asset.asset_id}</td>
                         <td className="capitalize">{asset.type.replace('_', ' ')}</td>
                         <td>{asset.manufacturer} {asset.model}</td>
-                        <td className="font-mono text-sm">{asset.serialNumber}</td>
-                        <td>{format(new Date(assignment.startDate), 'MMM d, yyyy')}</td>
+                        <td className="font-mono text-sm">{asset.serial_number}</td>
+                        <td>{format(new Date(assignment.start_date), 'MMM d, yyyy')}</td>
                       </tr>
                     );
                   })}
@@ -168,15 +294,15 @@ export default function EmployeeReport() {
                 </thead>
                 <tbody>
                   {pastAssignments.map(assignment => {
-                    const asset = getAsset(assignment.assetId);
+                    const asset = getAsset(assignment.asset_id);
                     if (!asset) return null;
                     return (
                       <tr key={assignment.id}>
-                        <td className="font-mono text-sm">{asset.assetId}</td>
+                        <td className="font-mono text-sm">{asset.asset_id}</td>
                         <td className="capitalize">{asset.type.replace('_', ' ')}</td>
                         <td>{asset.manufacturer} {asset.model}</td>
                         <td className="text-sm">
-                          {format(new Date(assignment.startDate), 'MMM d, yyyy')} - {format(new Date(assignment.endDate!), 'MMM d, yyyy')}
+                          {format(new Date(assignment.start_date), 'MMM d, yyyy')} - {format(new Date(assignment.end_date!), 'MMM d, yyyy')}
                         </td>
                         <td className="text-sm text-muted-foreground">{assignment.notes || '—'}</td>
                       </tr>
@@ -192,7 +318,7 @@ export default function EmployeeReport() {
           {/* Footer */}
           <div className="border-t border-border pt-6 mt-8 text-center text-sm text-muted-foreground print:border-black">
             <p>This report is generated automatically and is valid without signature.</p>
-            <p className="mt-1">AssetTrack IT Management System • Confidential</p>
+            <p className="mt-1">AssetTrack IT Management System • Confidential • ServiceFactory</p>
           </div>
         </div>
       </div>

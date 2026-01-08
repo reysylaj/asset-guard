@@ -1,3 +1,13 @@
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Pencil } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
 import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { DataTable } from '@/components/ui/data-table';
@@ -61,6 +71,38 @@ export default function Employees() {
     return assignments.filter(a => a.employee_id === employeeId && a.status === 'active').length;
   };
 
+  const handleExportPdf = () => {
+  const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text('Employees Report', 14, 20);
+
+    autoTable(doc, {
+      startY: 30,
+      head: [[
+        'Name',
+        'Badge ID',
+        'Department',
+        'Status',
+        'Start Date',
+        'Assigned Assets'
+      ]],
+      body: filteredEmployees.map(e => [
+        `${e.name} ${e.surname}`,
+        e.badge_id,
+        e.department,
+        e.status,
+        format(new Date(e.start_date), 'yyyy-MM-dd'),
+        `${getEmployeeAssetCount(e.id)}`
+      ]),
+    });
+
+    doc.save(`employees-${new Date().toISOString().slice(0,10)}.pdf`);
+  };
+
+  const [viewEmployee, setViewEmployee] = useState<Employee | null>(null);
+
+
   const columns = [
     {
       key: 'name',
@@ -121,14 +163,26 @@ export default function Employees() {
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              if (canEdit) {
-                setEditingEmployee(employee);
-                setFormOpen(true);
-              }
+              setViewEmployee(employee);
             }}
           >
             <Eye className="w-4 h-4" />
           </Button>
+          {canEdit && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingEmployee(employee);
+              setFormOpen(true);
+            }}
+          >
+            <Pencil className="w-4 h-4" />
+          </Button>
+          )}
+
+
         </div>
       ),
     },
@@ -186,7 +240,7 @@ export default function Employees() {
             </Select>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExportPdf}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
@@ -223,11 +277,12 @@ export default function Employees() {
           </div>
         </div>
 
+
         {/* Data Table */}
         <DataTable
           data={filteredEmployees}
           columns={columns}
-          onRowClick={(employee) => navigate(`/employees/${employee.id}`)}
+          onRowClick={(employee) => setViewEmployee(employee)}
         />
       </div>
 
@@ -236,6 +291,45 @@ export default function Employees() {
         onOpenChange={setFormOpen}
         employee={editingEmployee}
       />
+      {viewEmployee && (
+      <Dialog open onOpenChange={() => setViewEmployee(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Employee Details</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-muted-foreground">Name</span>
+              <p className="font-medium">
+                {viewEmployee.name} {viewEmployee.surname}
+              </p>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">Badge ID</span>
+              <p className="font-mono">{viewEmployee.badge_id}</p>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">Department</span>
+              <p>{viewEmployee.department}</p>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">Status</span>
+              <StatusBadge status={viewEmployee.status} />
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">Start Date</span>
+              <p>{format(new Date(viewEmployee.start_date), 'yyyy-MM-dd')}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )}
+
     </MainLayout>
   );
 }

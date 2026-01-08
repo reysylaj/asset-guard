@@ -5,6 +5,13 @@ import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { useAsset } from '@/hooks/useAssets';
+
+import { format } from 'date-fns';
+import { AssetPreviewDialog } from '@/components/assets/AssetPreviewDialog';
+
 import {
   Select,
   SelectContent,
@@ -12,12 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  Plus, 
-  Search, 
+import {
+  Plus,
+  Search,
   Download,
   Eye,
   FileText,
+  Pencil,
   Laptop,
   Monitor as MonitorIcon,
   Server,
@@ -26,14 +34,18 @@ import {
   MonitorDot,
   Loader2
 } from 'lucide-react';
+
 import { useAssets } from '@/hooks/useAssets';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useAssignments } from '@/hooks/useAssignments';
 import { useAuth } from '@/contexts/AuthContext';
 import { AssetFormDialog } from '@/components/forms/AssetFormDialog';
 import type { Database } from '@/integrations/supabase/types';
+import { OWNERSHIP_OPTIONS } from '@/constants/ownership';
 
 type AssetType = Database['public']['Enums']['asset_type'];
+
+
 
 const typeIcons: Record<string, typeof Laptop> = {
   laptop: Laptop,
@@ -61,7 +73,10 @@ export default function Assets() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [ownershipFilter, setOwnershipFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
-  const [editingAsset, setEditingAsset] = useState<any>(null);
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<any>(null);
+  const { data: editingAsset } = useAsset(editingAssetId ?? undefined);
+
 
   const { data: assets = [], isLoading } = useAssets();
   const { data: employees = [] } = useEmployees();
@@ -157,30 +172,47 @@ export default function Assets() {
       header: '',
       render: (asset: any) => (
         <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/reports/asset/${asset.id}`);
+              navigate(`/assets/${asset.id}?export=pdf`);
             }}
           >
             <FileText className="w-4 h-4" />
           </Button>
-          <Button 
-            variant="ghost" 
+
+          {/* VIEW */}
+          <Button
+            variant="ghost"
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              if (canEdit) {
-                setEditingAsset(asset);
-                setFormOpen(true);
-              }
+              setPreviewAsset(asset);
             }}
           >
             <Eye className="w-4 h-4" />
           </Button>
+
+
+          {/* EDIT */}
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingAssetId(asset.id);
+                setFormOpen(true);
+              }}
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+          )}
         </div>
+        
+
       ),
     },
   ];
@@ -194,6 +226,63 @@ export default function Assets() {
       </MainLayout>
     );
   }
+
+  const handleExport = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text('Assets Report', 14, 20);
+
+    doc.setFontSize(10);
+    doc.text(`Generated: ${format(new Date(), 'yyyy-MM-dd')}`, 14, 28);
+
+    autoTable(doc, {
+      startY: 40,
+      head: [[
+        'Asset ID',
+        'Type',
+        'Status',
+        'Ownership',
+        'Manufacturer',
+        'Model',
+        'Serial Number'
+      ]],
+      body: filteredAssets.map(a => [
+        a.asset_id,
+        a.type,
+        a.status,
+        a.ownership,
+        a.manufacturer,
+        a.model,
+        a.serial_number,
+      ]),
+    });
+
+    doc.save(`assets_${Date.now()}.pdf`);
+  };
+
+  const formAsset = editingAsset
+  ? {
+      id: editingAsset.id,
+      asset_id: editingAsset.asset_id,
+      type: editingAsset.type,
+      manufacturer: editingAsset.manufacturer,
+      model: editingAsset.model,
+      serial_number: editingAsset.serial_number,
+      hostname: editingAsset.hostname,
+      status: editingAsset.status,
+      ownership: editingAsset.ownership,
+      purchase_date: editingAsset.purchase_date,
+      warranty_expiry: editingAsset.warranty_expiry,
+      purchase_cost: editingAsset.purchase_cost,
+      created_at: editingAsset.created_at,
+      created_by: editingAsset.created_by,
+      is_readonly: editingAsset.is_readonly,
+    }
+  : null;
+
+
+
 
   return (
     <MainLayout 
@@ -245,19 +334,28 @@ export default function Assets() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Owners</SelectItem>
-                <SelectItem value="company">Company</SelectItem>
-                <SelectItem value="leased">Leased</SelectItem>
-                <SelectItem value="personal">Personal</SelectItem>
+                {OWNERSHIP_OPTIONS.map(owner => (
+                  <SelectItem key={owner} value={owner}>
+                    {owner}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
             {canEdit && (
-              <Button size="sm" onClick={() => { setEditingAsset(null); setFormOpen(true); }}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingAssetId(null);
+                  setFormOpen(true);
+                }}
+              >
+
                 <Plus className="w-4 h-4 mr-2" />
                 Add Asset
               </Button>
@@ -305,11 +403,21 @@ export default function Assets() {
         />
       </div>
 
-      <AssetFormDialog 
-        open={formOpen} 
-        onOpenChange={setFormOpen}
-        asset={editingAsset}
+      <AssetFormDialog
+        open={formOpen}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditingAssetId(null);
+        }}
+        asset={formAsset}
       />
+
+      <AssetPreviewDialog
+        open={!!previewAsset}
+        asset={previewAsset}
+        onOpenChange={() => setPreviewAsset(null)}
+      />
+
     </MainLayout>
   );
 }
